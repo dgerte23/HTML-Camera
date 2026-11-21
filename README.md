@@ -44,6 +44,10 @@ Suitable for quick shots, testing device cameras, and casual non-professional ph
 
 适合快速拍摄、测试设备摄像头、非专业日常摄影等。
 
+## Web version is used directly / 网页版直接使用
+
+Web : https://dgerte23.github.io/HTML-Camera/https://dgerte23.github.io/HTML-Camera/
+
 ---
 
 > ⚠️ Note: This project is most likely **not** going to be actively maintained. 大概率不会继续维护，随缘更新。
