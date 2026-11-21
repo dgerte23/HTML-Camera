@@ -46,7 +46,7 @@ Suitable for quick shots, testing device cameras, and casual non-professional ph
 
 ## Web version is used directly / 网页版直接使用
 
-Web : https://dgerte23.github.io/HTML-Camera/https://dgerte23.github.io/HTML-Camera/
+Web : https://dgerte23.github.io/HTML-Camera/
 
 ---
 
