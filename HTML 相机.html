@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ProCam 专业相机</title>
+<style>
+/* ========== CSS 变量 ========== */
+:root {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #1a1a1a;
+  --bg-panel: rgba(20, 20, 20, 0.92);
+  --bg-panel-light: rgba(40, 40, 40, 0.85);
+  --accent: #4fc3f7;
+  --accent-glow: rgba(79, 195, 247, 0.4);
+  --danger: #ff5252;
+  --danger-glow: rgba(255, 82, 82, 0.4);
+  --success: #69f0ae;
+  --warning: #ffd740;
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted: rgba(255, 255, 255, 0.4);
+  --border: rgba(255, 255, 255, 0.12);
+  --border-light: rgba(255, 255, 255, 0.08);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: all 0.15s ease;
+}
+
+/* ========== 全局重置 ========== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  width: 100%; height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ========== 主容器 ========== */
+.app-container {
+  position: relative;
+  width: 100vw; height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--bg-primary);
+}
+
+/* ========== 取景器区域 ========== */
+.viewfinder {
+  position: relative;
+  flex: 1;
+  background: #000;
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+
+#videoPreview {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: filter 0.3s ease;
+}
+
+/* 九宫格辅助线 */
+.grid-overlay {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.grid-overlay.active { opacity: 0.35; }
+.grid-overlay::before, .grid-overlay::after {
+  content: ''; position: absolute;
+  background: rgba(255,255,255,0.5);
+}
+.grid-overlay::before {
+  left: 33.33%; top: 0; bottom: 0; width: 1px;
+  box-shadow: 33.33vw 0 0 rgba(255,255,255,0.5);
+}
+.grid-overlay::after {
+  top: 33.33%; left: 0; right: 0; height: 1px;
+  box-shadow: 0 33.33vh 0 rgba(255,255,255,0.5);
+}
+.grid-overlay .grid-v2 {
+  position: absolute; left: 66.66%; top: 0; bottom: 0; width: 1px;
+  background: rgba(255,255,255,0.5);
+}
+.grid-overlay .grid-h2 {
+  position: absolute; top: 66.66%; left: 0; right: 0; height: 1px;
+  background: rgba(255,255,255,0.5);
+}
+
+/* 对焦框 */
+.focus-ring {
+  position: absolute;
+  width: 80px; height: 80px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(1.2);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+.focus-ring.active {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* ========== 顶部状态栏 ========== */
+.top-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+  z-index: 100;
+  pointer-events: none;
+}
+.top-bar > * { pointer-events: auto; }
+
+/* 录制计时器 */
+.recording-timer {
+  display: none;
+  align-items: center; gap: 8px;
+  background: rgba(255, 82, 82, 0.2);
+  border: 1px solid var(--danger);
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  backdrop-filter: blur(8px);
+}
+.recording-timer.active { display: flex; }
+.rec-dot {
+  width: 8px; height: 8px;
+  background: var(--danger);
+  border-radius: 50%;
+  animation: recBlink 1s ease-in-out infinite;
+}
+@keyframes recBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* 存储信息 */
+.storage-info {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: rgba(0,0,0,0.4);
+  border-radius: 12px;
+  padding: 4px 10px;
+  backdrop-filter: blur(8px);
+}
+.storage-bar {
+  width: 40px; height: 4px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.storage-bar-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+/* 右上角按钮组 */
+.top-right-group {
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* ========== 图标按钮（通用） ========== */
+.icon-btn {
+  width: 40px; height: 40px;
+  border: none; outline: none;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(8px);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  transition: var(--transition-fast);
+  border: 1px solid var(--border);
+}
+.icon-btn:hover { background: rgba(255,255,255,0.15); }
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn svg { width: 20px; height: 20px; fill: currentColor; }
+
+/* ========== 左侧参数面板 ========== */
+.params-panel {
+  position: absolute;
+  left: 0; top: 56px; bottom: 200px;
+  width: 52px;
+  display: flex; flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 0;
+  z-index: 90;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+.params-panel.open {
+  width: 220px;
+  background: linear-gradient(to right, rgba(0,0,0,0.7), transparent);
+}
+
+.param-item {
+  width: 100%;
+  display: flex; align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 0 8px 8px 0;
+  transition: var(--transition-fast);
+  position: relative;
+}
+.param-item:hover { background: rgba(255,255,255,0.08); }
+.param-item.active { background: rgba(79, 195, 247, 0.15); }
+
+.param-icon {
+  width: 28px; height: 28px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+}
+.param-icon svg { width: 18px; height: 18px; fill: currentColor; }
+
+.param-label {
+  margin-left: 10px;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--text-primary);
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: var(--transition);
+}
+.params-panel.open .param-label {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.param-value {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0;
+  transition: var(--transition);
+}
+.params-panel.open .param-value { opacity: 1; }
+
+/* ========== 参数展开抽屉 ========== */
+.param-drawer {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 300px;
+  max-width: 85vw;
+  background: var(--bg-panel);
+  backdrop-filter: blur(20px);
+  border-right: 1px solid var(--border);
+  padding: 0;
+  z-index: 105;
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+.param-drawer.open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 抽屉顶部导航栏 */
+.drawer-nav {
+  display: flex; align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.3);
+  position: sticky; top: 0; z-index: 2;
+}
+.drawer-back {
+  width: 36px; height: 36px;
+  border: none; background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  transition: var(--transition-fast);
+  margin-right: 8px;
+}
+.drawer-back:hover { background: rgba(255,255,255,0.1); }
+.drawer-back svg { width: 22px; height: 22px; fill: currentColor; }
+.drawer-nav-title {
+  font-size: 16px; font-weight: 600;
+  color: var(--accent);
+  flex: 1;
+}
+.drawer-nav-close {
+  width: 36px; height: 36px;
+  border: none; background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  transition: var(--transition-fast);
+}
+.drawer-nav-close:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.drawer-nav-close svg { width: 18px; height: 18px; fill: currentColor; }
+
+.drawer-body {
+  padding: 16px 16px 24px;
+  flex: 1;
+}
+
+/* 参数滑块 */
+.param-slider-group { margin-bottom: 24px; }
+.param-slider-label {
+  display: flex; justify-content: space-between;
+  font-size: 13px; margin-bottom: 8px;
+}
+.param-slider-label .name { color: var(--text-secondary); }
+.param-slider-label .val { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%; height: 4px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+  outline: none;
+  margin: 8px 0;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 0 8px var(--accent-glow);
+  border: 2px solid #fff;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid #fff;
+}
+
+/* 分段选择器 */
+.segmented-control {
+  display: flex;
+  background: rgba(255,255,255,0.06);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.segmented-control button {
+  flex: 1;
+  min-width: 48px;
+  padding: 6px 4px;
+  font-size: 11px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  white-space: nowrap;
+}
+.segmented-control button.active {
+  background: var(--accent);
+  color: #000;
+  font-weight: 600;
+}
+
+/* 抽屉内的选项按钮 */
+.drawer-option-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.drawer-option-btn:hover { background: rgba(255,255,255,0.08); }
+.drawer-option-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(79, 195, 247, 0.1);
+  font-weight: 500;
+}
+
+/* 摄像头选择器 */
+.camera-list { margin-bottom: 8px; }
+.camera-list-title {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ========== 预设面板 ========== */
+.presets-bar {
+  position: absolute;
+  left: 0; right: 0; bottom: 180px;
+  display: flex; gap: 8px;
+  padding: 0 16px;
+  overflow-x: auto;
+  z-index: 90;
+  scrollbar-width: none;
+}
+.presets-bar::-webkit-scrollbar { display: none; }
+
+.preset-chip {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(8px);
+  color: var(--text-secondary);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  white-space: nowrap;
+}
+.preset-chip:hover { border-color: rgba(255,255,255,0.3); color: #fff; }
+.preset-chip.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+/* ========== 底部控制栏 ========== */
+.bottom-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 180px;
+  background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.4));
+  display: flex; flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* 模式切换 */
+.mode-switch {
+  display: flex; gap: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 24px;
+  padding: 3px;
+  margin-bottom: 16px;
+}
+.mode-btn {
+  padding: 6px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.mode-btn.active {
+  background: var(--accent);
+  color: #000;
+  font-weight: 600;
+}
+
+/* 快门区域 */
+.shutter-area {
+  display: flex; align-items: center; justify-content: center;
+  gap: 40px;
+  margin-bottom: 12px;
+}
+
+/* 侧边小按钮 */
+.side-btn {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3);
+  background: rgba(0,0,0,0.3);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  transition: var(--transition-fast);
+  backdrop-filter: blur(8px);
+}
+.side-btn:hover { border-color: rgba(255,255,255,0.6); }
+.side-btn:active { transform: scale(0.9); }
+.side-btn svg { width: 20px; height: 20px; fill: currentColor; }
+
+/* 快门按钮 */
+.shutter-btn {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  background: rgba(255,255,255,0.1);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--transition);
+  backdrop-filter: blur(4px);
+  position: relative;
+}
+.shutter-btn::after {
+  content: '';
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: #fff;
+  transition: var(--transition);
+}
+.shutter-btn:active::after { transform: scale(0.88); }
+.shutter-btn.recording {
+  border-color: var(--danger);
+  animation: recPulse 1.5s ease-in-out infinite;
+}
+.shutter-btn.recording::after {
+  background: var(--danger);
+  border-radius: 6px;
+  width: 20px; height: 20px;
+}
+@keyframes recPulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--danger-glow); }
+  50% { box-shadow: 0 0 0 12px transparent; }
+}
+
+/* 格式/规格选择行 */
+.format-row {
+  display: flex; gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.format-chip {
+  padding: 4px 12px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.05);
+  color: var(--text-muted);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.format-chip.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(79, 195, 247, 0.1);
+}
+.format-chip:hover:not(.active) { color: var(--text-secondary); border-color: rgba(255,255,255,0.2); }
+
+.res-select {
+  background: rgba(255,255,255,0.05);
+  color: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 3px 8px;
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+}
+.res-select option { background: #222; }
+
+/* ========== 中央大计时器（录像时） ========== */
+.center-timer {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255,255,255,0.15);
+  pointer-events: none;
+  z-index: 50;
+  display: none;
+  text-shadow: 0 2px 16px rgba(0,0,0,0.5);
+}
+.center-timer.active { display: block; }
+
+/* ========== Toast 通知 ========== */
+.toast {
+  position: absolute;
+  top: 70px; left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 24px;
+  font-size: 13px;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: var(--transition);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ========== 快门闪光 ========== */
+.shutter-flash {
+  position: absolute; inset: 0;
+  background: #fff;
+  z-index: 150;
+  opacity: 0;
+  pointer-events: none;
+}
+.shutter-flash.fire {
+  animation: flashAnim 0.15s ease-out;
+}
+@keyframes flashAnim {
+  0% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+/* ========== 分辨率降级提示 ========== */
+.res-badge {
+  position: absolute;
+  top: 60px; right: 16px;
+  font-size: 11px;
+  background: rgba(255, 215, 64, 0.15);
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  padding: 3px 8px;
+  border-radius: 8px;
+  z-index: 100;
+  display: none;
+}
+.res-badge.show { display: block; }
+
+/* ========== 变焦倍率显示（取景器上） ========== */
+.zoom-display {
+  position: absolute;
+  bottom: 8px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(8px);
+  padding: 3px 12px;
+  border-radius: 12px;
+  z-index: 80;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  display: none;
+}
+.zoom-display.active { display: block; }
+
+/* ========== 电脑端适配 ========== */
+@media (min-width: 768px) {
+  .app-container {
+    max-width: 480px;
+    margin: 0 auto;
+    box-shadow: var(--shadow-lg);
+    height: 100vh;
+    position: relative;
+  }
+  .top-bar { height: 52px; }
+  .params-panel { top: 52px; bottom: 170px; }
+  .bottom-bar { height: 170px; }
+  .presets-bar { bottom: 160px; }
+}
+
+/* ========== 横屏适配 ========== */
+@media (orientation: landscape) and (max-height: 500px) {
+  .presets-bar { display: none; }
+  .bottom-bar { height: 120px; }
+  .params-panel { bottom: 120px; }
+  .mode-switch { margin-bottom: 8px; }
+}
+
+/* ========== 隐藏元素 ========== */
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <!-- 取景器 -->
+  <div class="viewfinder" id="viewfinder">
+    <video id="videoPreview" autoplay playsinline muted></video>
+
+    <!-- 九宫格 -->
+    <div class="grid-overlay" id="gridOverlay">
+      <div class="grid-v2"></div>
+      <div class="grid-h2"></div>
+    </div>
+
+    <!-- 对焦框 -->
+    <div class="focus-ring" id="focusRing"></div>
+
+    <!-- 中央大计时器 -->
+    <div class="center-timer" id="centerTimer">00:00</div>
+
+    <!-- 快门闪光 -->
+    <div class="shutter-flash" id="shutterFlash"></div>
+
+    <!-- 分辨率降级提示 -->
+    <div class="res-badge" id="resBadge"></div>
+
+    <!-- 变焦倍率显示 -->
+    <div class="zoom-display" id="zoomDisplay">1.0x</div>
+  </div>
+
+  <!-- 顶部状态栏 -->
+  <div class="top-bar">
+    <div class="recording-timer" id="recTimer">
+      <div class="rec-dot"></div>
+      <span id="recTimeText">00:00</span>
+    </div>
+
+    <div class="storage-info" id="storageInfo" title="存储信息">
+      <span id="storageText">计算中...</span>
+      <div class="storage-bar"><div class="storage-bar-fill" id="storageFill" style="width:100%"></div></div>
+    </div>
+
+    <div class="top-right-group">
+      <!-- 闪光灯 -->
+      <button class="icon-btn" id="flashBtn" title="闪光灯">
+        <svg viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-3l4-8z"/></svg>
+      </button>
+      <!-- 九宫格 -->
+      <button class="icon-btn" id="gridBtn" title="辅助线">
+        <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z"/></svg>
+      </button>
+      <!-- 翻转摄像头 -->
+      <button class="icon-btn" id="flipBtn" title="翻转摄像头">
+        <svg viewBox="0 0 24 24"><path d="M12 5V2L8 6l4 4V7c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0020 13c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 8.74A7.93 7.93 0 004 13c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 左侧参数面板 -->
+  <div class="params-panel" id="paramsPanel">
+    <!-- ISO -->
+    <div class="param-item" data-param="iso">
+      <div class="param-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+      </div>
+      <span class="param-label">感光度</span>
+      <span class="param-value" id="isoVal">Auto</span>
+    </div>
+    <!-- 快门 -->
+    <div class="param-item" data-param="shutter">
+      <div class="param-icon">
+        <svg viewBox="0 0 24 24"><path d="M9 3L5 6.99h3L9 3zm6 0l-4 3.99h3L15 3zm-4 8L7 10.99h2L11 11zm2 0L9 10.99h2L13 11zm-2 8L7 18.99h2L11 19zm2 0L9 18.99h2L13 19zm-4-4L5 14.99h2L9 15zm6 0L11 14.99h2L15 15zm-2-4L9 10.99h2L13 11zm2 0L11 10.99h2L15 11z"/></svg>
+      </div>
+      <span class="param-label">快门速度</span>
+      <span class="param-value" id="shutterVal">Auto</span>
+    </div>
+    <!-- 曝光补偿 -->
+    <div class="param-item" data-param="ev">
+      <div class="param-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm0-10c-2.21 0-4 1.34-4 4s1.34 4 4 4 4-1.34 4-4-1.79-4-4-4z"/></svg>
+      </div>
+      <span class="param-label">曝光补偿</span>
+      <span class="param-value" id="evVal">0</span>
+    </div>
+    <!-- 白平衡 -->
+    <div class="param-item" data-param="wb">
+      <div class="param-icon">
+        <svg viewBox="0 0 24 24"><path d="M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69zM12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm0-10c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z"/></svg>
+      </div>
+      <span class="param-label">白平衡</span>
+      <span class="param-value" id="wbVal">Auto</span>
+    </div>
+    <!-- 变焦 -->
+    <div class="param-item" data-param="zoom">
+      <div class="param-icon">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg>
+      </div>
+      <span class="param-label">变焦</span>
+      <span class="param-value" id="zoomVal">1.0x</span>
+    </div>
+    <!-- 摄像头选择 -->
+    <div class="param-item" data-param="camera">
+      <div class="param-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+      </div>
+      <span class="param-label">摄像头</span>
+      <span class="param-value" id="cameraVal">主摄</span>
+    </div>
+  </div>
+
+  <!-- 参数调节抽屉（全屏覆盖式） -->
+  <div class="param-drawer" id="paramDrawer">
+    <div class="drawer-nav">
+      <button class="drawer-back" id="drawerBack" title="退出参数面板">
+        <!-- 左箭头 SVG -->
+        <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      </button>
+      <span class="drawer-nav-title" id="drawerTitle">参数调节</span>
+      <button class="drawer-nav-close" id="drawerClose" title="关闭">
+        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="drawerContent"></div>
+  </div>
+
+  <!-- 预设栏 -->
+  <div class="presets-bar" id="presetsBar"></div>
+
+  <!-- 底部控制栏 -->
+  <div class="bottom-bar">
+    <!-- 模式切换 -->
+    <div class="mode-switch">
+      <button class="mode-btn active" data-mode="photo">拍照</button>
+      <button class="mode-btn" data-mode="video">录像</button>
+    </div>
+
+    <!-- 快门区域 -->
+    <div class="shutter-area">
+      <button class="side-btn" id="settingsBtn" title="设置">
+        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.06-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84a.484.484 0 00-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.488.488 0 00-.59.22L2.73 8.87a.49.49 0 00.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.06.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.25.24.41.48.41h3.84c.24 0 .43-.16.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 00-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      </button>
+
+      <button class="shutter-btn" id="shutterBtn" title="快门"></button>
+
+      <button class="side-btn" id="galleryBtn" title="相册">
+        <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 11h-2v2H9v-2H7v-2h2v-2h2v2h2v2zm2-9l2.5 3.5L16 8l4 5H8l3-4 2-2z"/></svg>
+      </button>
+    </div>
+
+    <!-- 格式/规格 -->
+    <div class="format-row">
+      <button class="format-chip active" data-format="jpg" data-type="photo">JPG</button>
+      <button class="format-chip" data-format="png" data-type="photo">PNG</button>
+      <button class="format-chip" data-format="webp" data-type="photo">WebP</button>
+      <span style="color:var(--text-muted);margin:0 2px;">|</span>
+      <button class="format-chip active" data-format="mp4" data-type="video">MP4</button>
+      <button class="format-chip" data-format="webm" data-type="video">WebM</button>
+      <span style="color:var(--text-muted);margin:0 2px;">|</span>
+      <select class="res-select" id="resolutionSelect">
+        <option value="3840x2160@60">4K 60fps</option>
+        <option value="3840x2160@30">4K 30fps</option>
+        <option value="2560x1440@60">2K 60fps</option>
+        <option value="1920x1080@60">1080P 60fps</option>
+        <option value="1920x1080@30">1080P 30fps</option>
+        <option value="1280x720@60">720P 60fps</option>
+        <option value="1280x720@30">720P 30fps</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ========== 全局状态 ========== */
+const state = {
+  mode: 'photo',
+  isRecording: false,
+  recordStartTime: 0,
+  recordTimer: null,
+  stream: null,
+  mediaRecorder: null,
+  recordedChunks: [],
+  currentCameraId: null,     // 当前使用的摄像头 deviceId
+  currentCameraLabel: '主摄',
+  availableCameras: [],     // 所有可用摄像头列表
+  photoFormat: 'jpg',
+  videoFormat: 'mp4',
+  resolution: { w: 3840, h: 2160, fps: 60 },
+  params: {
+    iso: 'auto',
+    shutter: 'auto',
+    ev: 0,
+    wb: 'auto',
+    zoom: 1.0
+  },
+  flashOn: false,
+  gridOn: false,
+  estimatedBitrate: 25 * 1024 * 1024,
+};
+
+/* ========== 预设定义 ========== */
+const PRESETS = [
+  { id: 'standard',  name: '标准',   params: { iso: 'auto', shutter: 'auto', ev: 0,  wb: 'auto', zoom: 1.0 } },
+  { id: 'star',     name: '星轨',   params: { iso: 3200,   shutter: 30,     ev: 0,  wb: 4000,  zoom: 1.0 } },
+  { id: 'portrait', name: '人像',   params: { iso: 'auto', shutter: 'auto', ev: 0,  wb: 'auto', zoom: 1.5 } },
+  { id: 'landscape',name: '风光',   params: { iso: 100,    shutter: 'auto', ev: 0,  wb: 5500,  zoom: 1.0 } },
+  { id: 'night',    name: '夜景',   params: { iso: 1600,   shutter: 2,      ev: 0,  wb: 3500,  zoom: 1.0 } },
+  { id: 'sport',    name: '运动',   params: { iso: 'auto', shutter: 2000,   ev: 0,  wb: 'auto', zoom: 2.0 } },
+  { id: 'macro',    name: '微距',   params: { iso: 400,    shutter: 'auto', ev: 0,  wb: 'auto', zoom: 3.0 } },
+  { id: 'sunset',   name: '日落',   params: { iso: 100,    shutter: 'auto', ev: 1,  wb: 6500,  zoom: 1.0 } },
+];
+
+/* ========== ISO / 快门 / 白平衡 选项 ========== */
+const ISO_OPTIONS = ['auto', 50, 100, 200, 400, 800, 1200, 1600, 2400, 3200, 6400, 12800];
+const SHUTTER_OPTIONS = ['auto', '1/4000', '1/2000', '1/1000', '1/500', '1/250', '1/120', '1/60', '1/30', '1/15', '1/8', '1/4', '1/2', '1s', '2s', '4s', '8s', '15s', '30s'];
+const WB_OPTIONS = ['auto', 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500, 7000, 7500, 8000];
+
+/* ========== DOM 引用 ========== */
+const $ = id => document.getElementById(id);
+const videoEl = $('videoPreview');
+const focusRing = $('focusRing');
+const shutterBtn = $('shutterBtn');
+const paramsPanel = $('paramsPanel');
+const paramDrawer = $('paramDrawer');
+const drawerContent = $('drawerContent');
+const drawerTitle = $('drawerTitle');
+const recTimer = $('recTimer');
+const recTimeText = $('recTimeText');
+const centerTimer = $('centerTimer');
+const storageText = $('storageText');
+const storageFill = $('storageFill');
+const resBadge = $('resBadge');
+const flashBtn = $('flashBtn');
+const gridBtn = $('gridBtn');
+const flipBtn = $('flipBtn');
+const gridOverlay = $('gridOverlay');
+const shutterFlash = $('shutterFlash');
+const toast = $('toast');
+const zoomDisplay = $('zoomDisplay');
+
+/* ========== Toast ========== */
+function showToast(msg, duration = 2000) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), duration);
+}
+
+/* ========== 枚举摄像头设备 ========== */
+async function enumerateCameras() {
+  try {
+    // 先请求一次权限以获取完整设备标签
+    const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    tempStream.getTracks().forEach(t => t.stop());
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d => d.kind === 'videoinput');
+
+    // 为摄像头命名（主摄/超广角/长焦/前置等）
+    state.availableCameras = cams.map((cam, idx) => {
+      const label = cam.label || `摄像头 ${idx + 1}`;
+      let shortName = label;
+      const lower = label.toLowerCase();
+      if (lower.includes('front') || lower.includes('前置') || lower.includes('selfie') || lower.includes('user')) {
+        shortName = '前置';
+      } else if (lower.includes('back') || lower.includes('后置') || lower.includes('rear') || lower.includes('environment')) {
+        if (lower.includes('wide') || lower.includes('超广') || lower.includes('ultra')) shortName = '超广角';
+        else if (lower.includes('tele') || lower.includes('长焦') || lower.includes('zoom')) shortName = '长焦';
+        else if (lower.includes('main') || lower.includes('主') || idx === 0) shortName = '主摄';
+        else shortName = `后置 ${idx}`;
+      } else {
+        if (idx === 0) shortName = '主摄';
+        else shortName = `摄像头 ${idx + 1}`;
+      }
+      return { deviceId: cam.deviceId, label: shortName, fullLabel: label };
+    });
+
+    // 更新左侧面板显示
+    $('cameraVal').textContent = state.currentCameraLabel || state.availableCameras[0]?.shortName || '主摄';
+
+    console.log('可用摄像头:', state.availableCameras);
+  } catch (err) {
+    console.warn('枚举摄像头失败:', err);
+    state.availableCameras = [];
+  }
+}
+
+/* ========== 选择摄像头 ========== */
+function selectCameraByIndex(index) {
+  if (index < 0 || index >= state.availableCameras.length) return;
+  const cam = state.availableCameras[index];
+  state.currentCameraId = cam.deviceId;
+  state.currentCameraLabel = cam.label;
+  $('cameraVal').textContent = cam.label;
+  showToast(`已切换: ${cam.label}`);
+  initCamera();
+}
+
+/* ========== 初始化摄像头 ========== */
+async function initCamera() {
+  try {
+    if (state.stream) {
+      state.stream.getTracks().forEach(t => t.stop());
+    }
+
+    let constraints;
+    if (state.currentCameraId) {
+      // 使用特定 deviceId
+      constraints = {
+        video: {
+          deviceId: { exact: state.currentCameraId },
+          width: { ideal: state.resolution.w },
+          height: { ideal: state.resolution.h },
+          frameRate: { ideal: state.resolution.fps }
+        },
+        audio: state.mode === 'video'
+      };
+    } else {
+      // 首次使用 facingMode
+      constraints = {
+        video: {
+          facingMode: 'environment',
+          width: { ideal: state.resolution.w },
+          height: { ideal: state.resolution.h },
+          frameRate: { ideal: state.resolution.fps }
+        },
+        audio: state.mode === 'video'
+      };
+    }
+
+    state.stream = await navigator.mediaDevices.getUserMedia(constraints);
+    videoEl.srcObject = state.stream;
+
+    // 检查实际分辨率
+    videoEl.onloadedmetadata = () => {
+      const settings = state.stream.getVideoTracks()[0].getSettings();
+      const actualW = settings.width || state.resolution.w;
+      const actualH = settings.height || state.resolution.h;
+      const actualFps = settings.frameRate || state.resolution.fps;
+
+      // 同步当前 deviceId
+      if (settings.deviceId && !state.currentCameraId) {
+        state.currentCameraId = settings.deviceId;
+        // 匹配标签
+        const matched = state.availableCameras.find(c => c.deviceId === settings.deviceId);
+        if (matched) {
+          state.currentCameraLabel = matched.label;
+          $('cameraVal').textContent = matched.label;
+        }
+      }
+
+      if (actualW < state.resolution.w * 0.9) {
+        resBadge.textContent = `实际: ${actualW}x${actualH}@${Math.round(actualFps)}fps`;
+        resBadge.classList.add('show');
+      } else {
+        resBadge.classList.remove('show');
+      }
+
+      updateEstimatedBitrate(actualW, actualH, actualFps);
+    };
+
+    applyCameraParams();
+
+    // 恢复闪光灯状态
+    if (state.flashOn) {
+      const track = state.stream.getVideoTracks()[0];
+      track.applyConstraints({ advanced: [{ torch: true }] }).catch(() => {});
+    }
+
+  } catch (err) {
+    console.error('摄像头初始化失败:', err);
+    showToast('摄像头访问失败: ' + err.message, 4000);
+  }
+}
+
+/* ========== 应用相机参数 ========== */
+async function applyCameraParams() {
+  if (!state.stream) return;
+  const track = state.stream.getVideoTracks()[0];
+  if (!track) return;
+
+  try {
+    const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+    const constraints = {};
+
+    // ISO
+    if (state.params.iso !== 'auto' && capabilities.iso) {
+      constraints.iso = { ideal: state.params.iso };
+    }
+    // 曝光时间 (快门)
+    if (state.params.shutter !== 'auto' && capabilities.exposureTime) {
+      const shutterMap = { '1/4000': 0.00025, '1/2000': 0.0005, '1/1000': 0.001, '1/500': 0.002, '1/250': 0.004, '1/120': 0.008, '1/60': 0.016, '1/30': 0.033, '1/15': 0.066, '1/8': 0.125, '1/4': 0.25, '1/2': 0.5, '1s': 1, '2s': 2, '4s': 4, '8s': 8, '15s': 15, '30s': 30 };
+      const expTime = shutterMap[state.params.shutter];
+      if (expTime) constraints.exposureTime = { ideal: expTime };
+    }
+    // 曝光补偿
+    if (state.params.ev !== 0 && capabilities.exposureCompensation) {
+      constraints.exposureCompensation = { ideal: state.params.ev };
+    }
+    // 白平衡
+    if (state.params.wb !== 'auto' && capabilities.colorTemperature) {
+      constraints.colorTemperature = { ideal: state.params.wb };
+    }
+    // 变焦（使用 track 原生 zoom 能力作为基础，配合 CSS transform 实现超范围缩放）
+    if (capabilities.zoom) {
+      const maxHWZoom = capabilities.zoom.max || 10;
+      const hwZoom = Math.min(state.params.zoom, maxHWZoom);
+      if (hwZoom >= 0.1) constraints.zoom = { ideal: hwZoom };
+    }
+
+    if (Object.keys(constraints).length > 0) {
+      await track.applyConstraints(constraints);
+    }
+
+    // 应用 CSS 缩放（用于超出硬件 zoom 范围的软变焦）
+    applyDigitalZoom();
+
+  } catch (e) {
+    console.warn('部分参数不支持:', e.message);
+    applyDigitalZoom();
+  }
+}
+
+/* ========== 数字变焦 (CSS transform) ========== */
+function applyDigitalZoom() {
+  const zoom = state.params.zoom;
+  // 获取硬件 zoom 最大值
+  let hwZoomMax = 1;
+  if (state.stream) {
+    const track = state.stream.getVideoTracks()[0];
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    hwZoomMax = (caps.zoom && caps.zoom.max) || 1;
+  }
+  // 超出硬件范围的部分用 CSS 缩放模拟
+  const cssScale = Math.max(1, zoom / Math.max(hwZoomMax, 1));
+  videoEl.style.transform = `scale(${cssScale})`;
+
+  // 更新变焦显示
+  zoomDisplay.textContent = zoom.toFixed(1) + 'x';
+  zoomDisplay.classList.add('active');
+  clearTimeout(zoomDisplay._hideTimer);
+  zoomDisplay._hideTimer = setTimeout(() => {
+    zoomDisplay.classList.remove('active');
+  }, 2000);
+}
+
+/* ========== 估算码率 ========== */
+function updateEstimatedBitrate(w, h, fps) {
+  const pixels = w * h * fps;
+  state.estimatedBitrate = Math.round(pixels * 0.15);
+}
+
+/* ========== 更新存储信息 ========== */
+function updateStorageInfo() {
+  if (!state.isRecording) {
+    storageText.textContent = '就绪';
+    return;
+  }
+  const elapsed = (Date.now() - state.recordStartTime) / 1000;
+  const sizeMB = (state.estimatedBitrate * elapsed) / (8 * 1024 * 1024);
+  const remainingSec = sizeMB > 0 ? Math.max(0, (1024 - sizeMB) * 8 * 1024 * 1024 / state.estimatedBitrate) : 0;
+  const remainingMin = Math.floor(remainingSec / 60);
+
+  storageText.textContent = `${sizeMB.toFixed(1)}MB | 可录~${remainingMin}分`;
+  storageFill.style.width = Math.min(100, (sizeMB / 1024) * 100) + '%';
+}
+
+setInterval(updateStorageInfo, 1000);
+
+/* ========== 拍照 ========== */
+function takePhoto() {
+  const canvas = document.createElement('canvas');
+  const w = videoEl.videoWidth || 1920;
+  const h = videoEl.videoHeight || 1080;
+  canvas.width = w;
+  canvas.height = h;
+
+  const ctx = canvas.getContext('2d');
+  // 如果 CSS 有缩放，需要补偿
+  const transform = videoEl.style.transform;
+  const scaleMatch = transform.match(/scale\(([\d.]+)\)/);
+  const scale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
+
+  if (scale > 1) {
+    // 数字变焦裁剪
+    const sx = (w - w / scale) / 2;
+    const sy = (h - h / scale) / 2;
+    const sw = w / scale;
+    const sh = h / scale;
+    ctx.drawImage(videoEl, sx, sy, sw, sh, 0, 0, w, h);
+  } else {
+    ctx.drawImage(videoEl, 0, 0, w, h);
+  }
+
+  const quality = state.photoFormat === 'png' ? undefined : 0.92;
+  const mimeType = `image/${state.photoFormat === 'jpg' ? 'jpeg' : state.photoFormat}`;
+  const dataUrl = canvas.toDataURL(mimeType, quality);
+
+  // 快门闪光
+  shutterFlash.classList.remove('fire');
+  void shutterFlash.offsetWidth;
+  shutterFlash.classList.add('fire');
+
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  a.download = `ProCam_${ts}.${state.photoFormat}`;
+  a.click();
+
+  showToast(`已保存 ${state.photoFormat.toUpperCase()} 照片`);
+}
+
+/* ========== 开始录像 ========== */
+function startRecording() {
+  if (!state.stream) return;
+
+  state.recordedChunks = [];
+  const mimeType = state.videoFormat === 'mp4' ? 'video/mp4' : 'video/webm';
+
+  let options = {};
+  if (MediaRecorder.isTypeSupported(mimeType)) {
+    options.mimeType = mimeType;
+  } else {
+    showToast(`当前浏览器不支持 ${state.videoFormat.toUpperCase()}，将使用默认格式`);
+  }
+
+  try {
+    state.mediaRecorder = new MediaRecorder(state.stream, options);
+  } catch (e) {
+    state.mediaRecorder = new MediaRecorder(state.stream);
+  }
+
+  state.mediaRecorder.ondataavailable = e => {
+    if (e.data.size > 0) state.recordedChunks.push(e.data);
+  };
+
+  state.mediaRecorder.onstop = () => {
+    const blob = new Blob(state.recordedChunks, { type: state.mediaRecorder.mimeType || 'video/mp4' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ext = blob.type.includes('webm') ? 'webm' : 'mp4';
+    a.download = `ProCam_${ts}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`已保存 ${ext.toUpperCase()} 视频`);
+  };
+
+  state.mediaRecorder.start(1000);
+  state.isRecording = true;
+  state.recordStartTime = Date.now();
+
+  shutterBtn.classList.add('recording');
+  recTimer.classList.add('active');
+  centerTimer.classList.add('active');
+
+  state.recordTimer = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - state.recordStartTime) / 1000);
+    const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const s = String(elapsed % 60).padStart(2, '0');
+    recTimeText.textContent = `${m}:${s}`;
+    centerTimer.textContent = `${m}:${s}`;
+    updateStorageInfo();
+  }, 250);
+
+  showToast('开始录像');
+}
+
+/* ========== 停止录像 ========== */
+function stopRecording() {
+  if (!state.isRecording) return;
+  state.mediaRecorder.stop();
+  state.isRecording = false;
+
+  clearInterval(state.recordTimer);
+  shutterBtn.classList.remove('recording');
+  recTimer.classList.remove('active');
+  centerTimer.classList.remove('active');
+  storageText.textContent = '就绪';
+  storageFill.style.width = '100%';
+
+  showToast('停止录像，正在保存...');
+}
+
+/* ========== 关闭抽屉（通用） ========== */
+function closeDrawer() {
+  paramDrawer.classList.remove('open');
+  paramsPanel.classList.remove('open');
+}
+
+/* ========== 参数面板交互 ========== */
+paramsPanel.addEventListener('click', e => {
+  const item = e.target.closest('.param-item');
+  if (!item) {
+    paramsPanel.classList.toggle('open');
+    paramDrawer.classList.remove('open');
+    return;
+  }
+  openParamDrawer(item.dataset.param);
+});
+
+/* 抽屉左上角返回按钮 -> 收起抽屉，回到参数面板 */
+$('drawerBack').addEventListener('click', () => {
+  paramDrawer.classList.remove('open');
+});
+
+/* 抽屉右上角关闭按钮 -> 完全收起 */
+$('drawerClose').addEventListener('click', () => {
+  closeDrawer();
+});
+
+/* 点击抽屉背景遮罩关闭 */
+paramDrawer.addEventListener('click', e => {
+  if (e.target === paramDrawer) closeDrawer();
+});
+
+/* ========== 打开参数抽屉 ========== */
+function openParamDrawer(paramKey) {
+  const titles = {
+    iso: '感光度 (ISO)',
+    shutter: '快门速度',
+    ev: '曝光补偿 (EV)',
+    wb: '白平衡 (WB)',
+    zoom: '变焦 (Zoom)',
+    camera: '选择摄像头'
+  };
+  drawerTitle.textContent = titles[paramKey] || '参数';
+  drawerContent.innerHTML = '';
+
+  switch (paramKey) {
+    case 'iso':
+      renderSelectDrawer('iso', ISO_OPTIONS, v => v === 'auto' ? '自动' : v, v => {
+        state.params.iso = v === 'auto' ? 'auto' : Number(v);
+        $('isoVal').textContent = state.params.iso === 'auto' ? 'Auto' : state.params.iso;
+        applyCameraParams();
+      });
+      break;
+    case 'shutter':
+      renderSelectDrawer('shutter', SHUTTER_OPTIONS, v => v === 'auto' ? '自动' : v, v => {
+        state.params.shutter = v;
+        $('shutterVal').textContent = v === 'auto' ? 'Auto' : v;
+        applyCameraParams();
+      });
+      break;
+    case 'ev':
+      renderSliderDrawer('ev', -2, 2, 0.25, state.params.ev, v => {
+        state.params.ev = v;
+        $('evVal').textContent = (v > 0 ? '+' : '') + v;
+        applyCameraParams();
+      }, v => (v > 0 ? '+' : '') + v);
+      break;
+    case 'wb':
+      renderSelectDrawer('wb', WB_OPTIONS, v => v === 'auto' ? '自动' : v + 'K', v => {
+        state.params.wb = v === 'auto' ? 'auto' : Number(v);
+        $('wbVal').textContent = state.params.wb === 'auto' ? 'Auto' : state.params.wb + 'K';
+        applyCameraParams();
+      });
+      break;
+    case 'zoom':
+      renderZoomDrawer();
+      break;
+    case 'camera':
+      renderCameraDrawer();
+      break;
+  }
+
+  paramDrawer.classList.add('open');
+}
+
+/* ========== 渲染下拉选择抽屉 ========== */
+function renderSelectDrawer(key, options, labelFn, onChange) {
+  const current = state.params[key];
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'drawer-option-btn' + (opt == current ? ' active' : '');
+    btn.textContent = labelFn(opt);
+    btn.onclick = () => {
+      onChange(opt);
+      btn.parentElement.querySelectorAll('.drawer-option-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+    drawerContent.appendChild(btn);
+  });
+}
+
+/* ========== 渲染滑块抽屉 ========== */
+function renderSliderDrawer(key, min, max, step, value, onChange, labelFn) {
+  const group = document.createElement('div');
+  group.className = 'param-slider-group';
+
+  const labelDiv = document.createElement('div');
+  labelDiv.className = 'param-slider-label';
+  labelDiv.innerHTML = `<span class="name">${key.toUpperCase()}</span><span class="val" id="sliderVal">${labelFn(value)}</span>`;
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = min;
+  slider.max = max;
+  slider.step = step;
+  slider.value = value;
+
+  slider.oninput = () => {
+    const v = parseFloat(slider.value);
+    $('sliderVal').textContent = labelFn(v);
+    onChange(v);
+  };
+
+  group.appendChild(labelDiv);
+  group.appendChild(slider);
+  drawerContent.appendChild(group);
+}
+
+/* ========== 渲染变焦抽屉 (0.1x ~ 200x) ========== */
+function renderZoomDrawer() {
+  // 快速预设按钮
+  const presetsDiv = document.createElement('div');
+  presetsDiv.style.marginBottom = '20px';
+  const presetsLabel = document.createElement('div');
+  presetsLabel.className = 'camera-list-title';
+  presetsLabel.textContent = '快捷倍率';
+  presetsDiv.appendChild(presetsLabel);
+
+  const seg = document.createElement('div');
+  seg.className = 'segmented-control';
+  const quickZooms = [0.5, 1, 2, 5, 10, 30, 60, 100, 200];
+  quickZooms.forEach(z => {
+    const b = document.createElement('button');
+    b.textContent = z + 'x';
+    if (Math.abs(state.params.zoom - z) < 0.05) b.classList.add('active');
+    b.onclick = () => {
+      state.params.zoom = z;
+      $('zoomVal').textContent = z.toFixed(1) + 'x';
+      seg.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      // 更新滑块
+      const sl = drawerContent.querySelector('input[type="range"]');
+      if (sl) sl.value = z;
+      const sv = drawerContent.querySelector('.val');
+      if (sv) sv.textContent = z.toFixed(1) + 'x';
+      applyCameraParams();
+    };
+    seg.appendChild(b);
+  });
+  presetsDiv.appendChild(seg);
+  drawerContent.appendChild(presetsDiv);
+
+  // 精细滑块 0.1 ~ 200，对数刻度体验更好
+  const group = document.createElement('div');
+  group.className = 'param-slider-group';
+
+  const labelDiv = document.createElement('div');
+  labelDiv.className = 'param-slider-label';
+  labelDiv.innerHTML = `<span class="name">变焦倍率</span><span class="val" id="zoomSliderVal">${state.params.zoom.toFixed(1)}x</span>`;
+
+  // 使用对数映射让滑块在高低端都好用
+  const MIN_Z = 0.1, MAX_Z = 200;
+  const logMin = Math.log10(MIN_Z);
+  const logMax = Math.log10(MAX_Z);
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = 0;
+  slider.max = 1000;
+  slider.step = 1;
+  // 将当前值映射到 0-1000
+  const mappedVal = ((Math.log10(state.params.zoom) - logMin) / (logMax - logMin)) * 1000;
+  slider.value = mappedVal;
+
+  slider.oninput = () => {
+    const t = parseFloat(slider.value) / 1000;
+    const z = Math.pow(10, logMin + t * (logMax - logMin));
+    const rounded = Math.round(z * 10) / 10;
+    state.params.zoom = rounded;
+    $('zoomVal').textContent = rounded.toFixed(1) + 'x';
+    $('zoomSliderVal').textContent = rounded.toFixed(1) + 'x';
+    // 更新快捷按钮高亮
+    seg.querySelectorAll('button').forEach(b => {
+      const bz = parseFloat(b.textContent);
+      b.classList.toggle('active', Math.abs(bz - rounded) < 0.05);
+    });
+    applyCameraParams();
+  };
+
+  group.appendChild(labelDiv);
+  group.appendChild(slider);
+  drawerContent.appendChild(group);
+
+  // 提示
+  const tip = document.createElement('div');
+  tip.style.fontSize = '11px';
+  tip.style.color = 'var(--text-muted)';
+  tip.style.marginTop = '8px';
+  tip.textContent = '0.1x=超广角视野 | 1x=标准 | >硬件上限将启用数字变焦(画质下降)';
+  drawerContent.appendChild(tip);
+}
+
+/* ========== 渲染摄像头选择抽屉 ========== */
+function renderCameraDrawer() {
+  const title = document.createElement('div');
+  title.className = 'camera-list-title';
+  title.textContent = `检测到 ${state.availableCameras.length} 个摄像头`;
+  drawerContent.appendChild(title);
+
+  state.availableCameras.forEach((cam, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'drawer-option-btn' + (cam.deviceId === state.currentCameraId ? ' active' : '');
+    btn.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;">
+        <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;flex-shrink:0;"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        <div>
+          <div style="font-weight:500;">${cam.label}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${cam.fullLabel}</div>
+        </div>
+      </div>
+    `;
+    btn.onclick = () => {
+      drawerContent.querySelectorAll('.drawer-option-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectCameraByIndex(idx);
+    };
+    drawerContent.appendChild(btn);
+  });
+
+  // 提示
+  const tip = document.createElement('div');
+  tip.style.fontSize = '11px';
+  tip.style.color = 'var(--text-muted)';
+  tip.style.marginTop = '12px';
+  tip.textContent = '提示: 切换摄像头后，变焦倍率会重置。部分设备可能需要重新授权。';
+  drawerContent.appendChild(tip);
+}
+
+/* ========== 预设栏渲染 ========== */
+function renderPresets() {
+  const container = $('presetsBar');
+  container.innerHTML = '';
+  PRESETS.forEach(p => {
+    const chip = document.createElement('button');
+    chip.className = 'preset-chip' + (p.id === 'standard' ? ' active' : '');
+    chip.textContent = p.name;
+    chip.onclick = (e) => applyPreset(p, e);
+    container.appendChild(chip);
+  });
+}
+
+function applyPreset(preset, event) {
+  state.params = { ...preset.params };
+  $('isoVal').textContent = state.params.iso === 'auto' ? 'Auto' : state.params.iso;
+  $('shutterVal').textContent = state.params.shutter === 'auto' ? 'Auto' : state.params.shutter;
+  $('evVal').textContent = (state.params.ev > 0 ? '+' : '') + state.params.ev;
+  $('wbVal').textContent = state.params.wb === 'auto' ? 'Auto' : state.params.wb + 'K';
+  $('zoomVal').textContent = state.params.zoom.toFixed(1) + 'x';
+
+  document.querySelectorAll('.preset-chip').forEach(c => c.classList.remove('active'));
+  if (event && event.target) event.target.classList.add('active');
+  else {
+    const chip = Array.from(document.querySelectorAll('.preset-chip')).find(c => c.textContent === preset.name);
+    if (chip) chip.classList.add('active');
+  }
+
+  applyCameraParams();
+  showToast(`已应用: ${preset.name}`);
+}
+
+/* ========== 模式切换 ========== */
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.mode = btn.dataset.mode;
+    initCamera();
+  });
+});
+
+/* ========== 快门按钮 ========== */
+shutterBtn.addEventListener('click', () => {
+  if (state.mode === 'photo') {
+    takePhoto();
+  } else {
+    if (state.isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }
+});
+
+/* ========== 格式选择 ========== */
+document.querySelectorAll('.format-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const type = chip.dataset.type;
+    const format = chip.dataset.format;
+
+    if (type === 'photo') {
+      document.querySelectorAll(`.format-chip[data-type="photo"]`).forEach(c => c.classList.remove('active'));
+      state.photoFormat = format;
+    } else {
+      document.querySelectorAll(`.format-chip[data-type="video"]`).forEach(c => c.classList.remove('active'));
+      state.videoFormat = format;
+    }
+    chip.classList.add('active');
+    showToast(`${type === 'photo' ? '照片' : '视频'}格式: ${format.toUpperCase()}`);
+  });
+});
+
+/* ========== 分辨率选择 ========== */
+$('resolutionSelect').addEventListener('change', e => {
+  const [w, hFps] = e.target.value.split('x');
+  const [h, fps] = hFps.split('@');
+  state.resolution = { w: Number(w), h: Number(h), fps: Number(fps) };
+  showToast(`分辨率: ${w}x${h} @${fps}fps`);
+  initCamera();
+});
+
+/* ========== 闪光灯 ========== */
+flashBtn.addEventListener('click', () => {
+  state.flashOn = !state.flashOn;
+  flashBtn.style.color = state.flashOn ? 'var(--warning)' : '#fff';
+  if (state.stream) {
+    const track = state.stream.getVideoTracks()[0];
+    track.applyConstraints({ advanced: [{ torch: state.flashOn }] }).catch(() => {});
+  }
+  showToast(state.flashOn ? '闪光灯开启' : '闪光灯关闭');
+});
+
+/* ========== 九宫格 ========== */
+gridBtn.addEventListener('click', () => {
+  state.gridOn = !state.gridOn;
+  gridOverlay.classList.toggle('active', state.gridOn);
+  gridBtn.style.color = state.gridOn ? 'var(--accent)' : '#fff';
+});
+
+/* ========== 翻转摄像头 ========== */
+flipBtn.addEventListener('click', () => {
+  // 在前后摄像头之间切换
+  const front = state.availableCameras.find(c => c.label === '前置');
+  const back = state.availableCameras.find(c => c.label === '主摄') || state.availableCameras.find(c => c.label.includes('后置'));
+
+  if (state.currentCameraLabel === '前置' && back) {
+    selectCameraByIndex(state.availableCameras.indexOf(back));
+  } else if (front) {
+    selectCameraByIndex(state.availableCameras.indexOf(front));
+  } else {
+    showToast('未检测到前置摄像头');
+  }
+});
+
+/* ========== 点击对焦 ========== */
+$('viewfinder').addEventListener('click', e => {
+  if (e.target !== videoEl) return;
+  const rect = videoEl.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  focusRing.style.left = x + 'px';
+  focusRing.style.top = y + 'px';
+  focusRing.classList.add('active');
+
+  setTimeout(() => focusRing.classList.remove('active'), 1500);
+
+  if (state.stream) {
+    const track = state.stream.getVideoTracks()[0];
+    const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+    if (capabilities.focusMode) {
+      track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] }).catch(() => {});
+    }
+  }
+});
+
+/* ========== 键盘快捷键 ========== */
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    shutterBtn.click();
+  } else if (e.code === 'KeyP') {
+    document.querySelector('[data-mode="photo"]').click();
+  } else if (e.code === 'KeyV') {
+    document.querySelector('[data-mode="video"]').click();
+  } else if (e.code === 'Escape') {
+    closeDrawer();
+  }
+});
+
+/* ========== 初始化 ========== */
+renderPresets();
+
+// 先枚举摄像头，再初始化
+enumerateCameras().then(() => {
+  initCamera();
+});
+
+// 处理页面隐藏时停止录像
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && state.isRecording) {
+    stopRecording();
+  }
+});
+
+// 摄像头热插拔监听
+navigator.mediaDevices.addEventListener('devicechange', () => {
+  enumerateCameras();
+});
+</script>
+</body>
+</html>
